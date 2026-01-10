@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"github.com/bakarr/k3s-ignite/internal/k3s"
+	"time"
+
 	"github.com/bakarr/k3s-ignite/internal/ssh"
 )
 
@@ -13,46 +13,57 @@ func main() {
 	user := "ubuntu"
 	keyPath := "C:\\Users\\BOSS\\.ssh\\id_rsa"
 
-	// ... (your existing connection and install logic here) ...
+	fmt.Println("🚀 Phase 1: Installing K3s...")
+	ssh.ExecuteCommand(ip, user, keyPath, "curl -sfL https://get.k3s.io | sh -")
 
-	fmt.Println("🛰️  Fetching cluster credentials...")
-	
-	// We use 'sudo cat' because the config is owned by root
-	rawConfig, err := ssh.ExecuteCommand(ip, user, keyPath, "sudo cat /etc/rancher/k3s/k3s.yaml")
+	fmt.Println("🧠 Phase 2: Injecting Monitoring Brain...")
+	// We combine RBAC and Pod into one command
+	manifest := `
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitor-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: monitor-admin
+subjects:
+- kind: ServiceAccount
+  name: monitor-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ignite-brain
+spec:
+  serviceAccountName: monitor-sa
+  containers:
+  - name: engine
+    image: bakarr/ignite-brain:latest
+    ports:
+    - containerPort: 8080
+`
+	fmt.Println("⏳ Waiting for Cluster to stabilize...")
+	for i := 0; i < 10; i++ {
+		_, err := ssh.ExecuteCommand(ip, user, keyPath, "sudo k3s kubectl get nodes")
+		if err == nil {
+			fmt.Println("✅ Cluster is Ready!")
+			break
+		}
+		fmt.Printf("... Still waiting (%d/10)\n", i+1)
+		time.Sleep(10 * time.Second)
+	}
+	cmd := fmt.Sprintf("echo '%s' | sudo k3s kubectl apply -f -", manifest)
+	_, err := ssh.ExecuteCommand(ip, user, keyPath, cmd)
 	if err != nil {
-		log.Fatalf("❌ Could not read remote config: %v", err)
+		log.Fatalf("❌ Injection failed: %v", err)
 	}
 
-	// Fix the IP
-	finalConfig := k3s.FetchAndFixConfig(rawConfig, ip)
-
-	// Save to local file
-	fileName := "ignite.kubeconfig"
-	err = os.WriteFile(fileName, []byte(finalConfig), 0600)
-	if err != nil {
-		log.Fatalf("❌ Failed to save config locally: %v", err)
-	}
-
-	fmt.Printf("✅ Success! Config saved as %s\n", fileName)
-	fmt.Println("--------------------------------------------------")
-	fmt.Printf("🔥 Run this to see your nodes: \nkubectl --kubeconfig=%s get nodes\n", fileName)
-
-    kubeconfig := "ignite.kubeconfig"
-    client, err := k3s.GetClient(kubeconfig)
-    if err != nil {
-        log.Fatalf("❌ Failed to create K8s client: %v", err)
-    }
-
-    fmt.Println("🔍 Querying Cluster for running pods...")
-    
-    // List all pods in the 'kube-system' namespace
-    pods, err := client.CoreV1().Pods("kube-system").List(context.TODO(), metav1.ListOptions{})
-    if err != nil {
-        log.Fatalf("❌ Failed to list pods: %v", err)
-    }
-
-    fmt.Printf("📦 Found %d system pods:\n", len(pods.Items))
-    for _, pod := range pods.Items {
-        fmt.Printf("   - [%s] %s\n", pod.Status.Phase, pod.Name)
-    }
+	fmt.Println("✅ Ignition Complete! Cluster is now self-monitoring.")
 }
