@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	ip := "34.55.10.49"
+	ip := "34.xx.xx.xx"
 	user := "ubuntu"
 	keyPath := "C:\\Users\\BOSS\\.ssh\\id_rsa"
 
