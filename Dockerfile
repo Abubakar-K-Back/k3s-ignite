@@ -21,7 +21,7 @@ COPY --from=builder /app/ignite-brain .
 
 # --- FIX START ---
 # Ensure we copy the templates folder into the final image
-COPY --from=builder /app/cmd/templates ./templates
+COPY --from=builder /app/templates ./templates
 # --- FIX END ---
 
 EXPOSE 8080
