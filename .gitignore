@@ -1,0 +1,16 @@
+# Binaries
+bin/
+ignite-brain
+ignite-cli
+
+# Kubernetes / Secrets
+.kube/
+*.pem
+*.key
+kubeconfig.yaml
+
+# Dependencies
+vendor/
+
+# OS files
+.DS_Store
