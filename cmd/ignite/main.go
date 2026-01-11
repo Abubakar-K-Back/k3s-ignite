@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/bakarr/k3s-ignite/internal/ssh"
+	"github.com/bakarr/k3s-ignite/cmd/internal/ssh"
 )
 
 func main() {

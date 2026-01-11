@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>K3s-Ignite | Control Plane</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c; --card: #16161a; --accent: #f59e0b;
+            --text: #e2e8f0; --text-dim: #94a3b8; --border: #27272a;
+            --success: #10b981; --error: #f43f5e;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding: 40px; margin: 0; }
+        
+        /* Layout */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        h1 { color: var(--accent); margin: 0; font-size: 1.5rem; }
+        .deploy-card { background: var(--card); border: 1px solid var(--border); padding: 20px; border-radius: 12px; margin-bottom: 30px; }
+        input { background: #000; border: 1px solid var(--border); color: white; padding: 10px; border-radius: 6px; width: 180px; }
+        
+        /* Buttons */
+        .btn { border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .launch-btn { background: var(--accent); color: black; }
+        .reload-btn { background: var(--card); color: var(--text); border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+        
+        /* Tabs Styling */
+        .tabs { display: flex; gap: 5px; margin-bottom: 20px; background: var(--card); padding: 5px; border-radius: 8px; width: fit-content; border: 1px solid var(--border); position: relative; z-index: 10; }
+        .tab-btn { background: none; border: none; color: var(--text-dim); padding: 8px 16px; cursor: pointer !important; font-weight: 600; border-radius: 6px; transition: 0.2s; }
+        .tab-btn.active { background: var(--bg); color: var(--accent); }
+
+        /* Visibility Logic */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Table Styling */
+        table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+        th { background: #1c1c21; padding: 14px; text-align: left; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+        td { padding: 14px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        
+        /* Status */
+        .badge { padding: 4px 10px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+        .status-running, .status-bound { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+        .status-error { background: rgba(244, 63, 94, 0.1); color: var(--error); }
+        
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { animation: spin 1s linear infinite; display: inline-block; }
+    </style>
+
+    <script>
+        // Store the active tab globally
+        window.currentTab = 'pods-tab';
+
+        // Function to render the correct view
+        window.renderTabs = function() {
+            console.log("Rendering Tab:", window.currentTab);
+            
+            // 1. Update Content visibility
+            document.querySelectorAll(".tab-content").forEach(content => {
+                content.style.display = (content.id === window.currentTab) ? "block" : "none";
+                if (content.id === window.currentTab) content.classList.add('active');
+                else content.classList.remove('active');
+            });
+
+            // 2. Update Button highlights
+            document.querySelectorAll(".tab-btn").forEach(btn => {
+                if (btn.getAttribute('data-tab') === window.currentTab) {
+                    btn.classList.add("active");
+                } else {
+                    btn.classList.remove("active");
+                }
+            });
+        };
+
+        // Event Delegation: One listener for all tab buttons
+        document.addEventListener('click', function (e) {
+            if (e.target && e.target.classList.contains('tab-btn')) {
+                window.currentTab = e.target.getAttribute('data-tab');
+                window.renderTabs();
+            }
+        });
+
+        // Re-run render after HTMX updates the tables
+        document.addEventListener('htmx:afterSettle', function() {
+            window.renderTabs();
+        });
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', window.renderTabs);
+    </script>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🔥 K3s-Ignite</h1>
+        <div class="header-actions">
+            <button class="btn reload-btn" 
+                    hx-get="/?ns={{.CurrentNs}}" 
+                    hx-select=".tab-container" 
+                    hx-target=".tab-container" 
+                    hx-swap="outerHTML">
+                <span class="htmx-indicator spinner">↻</span>
+                Sync Cluster
+            </button>
+
+            <select onchange="window.location.href='/?ns=' + this.value" style="background: var(--card); color: white; border: 1px solid var(--border); padding: 8px; border-radius: 6px;">
+                <option value="">All Namespaces</option>
+                {{$current := .CurrentNs}}
+                {{range .Namespaces}}<option value="{{.}}" {{if eq . $current}}selected{{end}}>{{.}}</option>{{end}}
+            </select>
+        </div>
+    </div>
+
+    <div class="deploy-card">
+        <form action="/api/deploy" method="POST">
+            <input type="text" name="appName" placeholder="App Name" required>
+            <input type="text" name="image" placeholder="Container Image" required>
+            <input type="number" name="port" value="80" style="width: 70px;">
+            <button type="submit" class="btn launch-btn">Ignite App</button>
+        </form>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn" data-tab="pods-tab">Pods</button>
+        <button class="tab-btn" data-tab="deploy-tab">Deployments</button>
+        <button class="tab-btn" data-tab="sts-tab">StatefulSets</button>
+        <button class="tab-btn" data-tab="storage-tab">Storage</button>
+    </div>
+
+    <div class="tab-container">
+        <div id="pods-tab" class="tab-content">
+            <table>
+                <thead><tr><th>Name</th><th>Namespace</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                    {{range .Pods}}
+                    <tr>
+                        <td>{{.Name}}</td>
+                        <td>{{.Namespace}}</td>
+                        <td><span class="badge {{if eq .Status "Running"}}status-running{{else}}status-error{{end}}">{{.Status}}</span></td>
+                        <td>
+                            <a href="/api/logs?name={{.Name}}&ns={{.Namespace}}" target="_blank" style="color:var(--accent); text-decoration:none; margin-right:10px;">Logs</a>
+                            <a href="/api/delete?name={{.Name}}&ns={{.Namespace}}" style="color:var(--error); text-decoration:none;">Delete</a>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        <div id="deploy-tab" class="tab-content">
+            <table>
+                <thead><tr><th>Name</th><th>Replicas</th><th>Image</th></tr></thead>
+                <tbody>
+                    {{range .Deployments}}
+                    <tr>
+                        <td>{{.Name}}</td>
+                        <td>{{.Status.ReadyReplicas}} / {{.Spec.Replicas}}</td>
+                        <td><code style="color:var(--text-dim)">{{(index .Spec.Template.Spec.Containers 0).Image}}</code></td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        <div id="sts-tab" class="tab-content">
+            <table>
+                <thead><tr><th>Name</th><th>Replicas</th></tr></thead>
+                <tbody>
+                    {{range .StatefulSets}}
+                    <tr><td>{{.Name}}</td><td>{{.Status.ReadyReplicas}} / {{.Spec.Replicas}}</td></tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        <div id="storage-tab" class="tab-content">
+            <table>
+                <thead><tr><th>Name</th><th>Status</th><th>Capacity</th></tr></thead>
+                <tbody>
+                    {{range .PVCs}}
+                    <tr>
+                        <td>{{.Name}}</td>
+                        <td><span class="badge {{if eq .Status.Phase "Bound"}}status-bound{{else}}status-error{{end}}">{{.Status.Phase}}</span></td>
+                        <td>{{index .Status.Capacity "storage"}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</body>
+</html>

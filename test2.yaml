@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ignite-web-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ignite-web
+  template:
+    metadata:
+      labels:
+        app: ignite-web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: storage
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: ignite-data-pvc
